@@ -124,6 +124,7 @@ import {
   type ThreadComparator,
 } from "../model/project-thread-groups.js";
 import { buildSidebarEntitySectionId } from "../model/sidebar-section-order.js";
+import { createSidebarTreeParentResolver } from "../model/sidebar-tree-parent.js";
 import { SidebarWindowedItems } from "./SidebarWindowedItems.js";
 import { SidebarSectionRow } from "./SidebarSectionRow.js";
 import { TopLevelSidebarSection } from "./TopLevelSidebarSection.js";
@@ -2474,13 +2475,15 @@ function getThreadIdsWithChildren(
   threads: readonly SidebarThread[],
 ): Set<string> {
   const threadIds = new Set(threads.map((thread) => thread.id));
+  const resolveTreeParentId = createSidebarTreeParentResolver(threads);
   const threadIdsWithChildren = new Set<string>();
 
   for (const thread of threads) {
-    if (thread.parentThreadId === null) continue;
-    if (!threadIds.has(thread.parentThreadId)) continue;
+    const treeParentId = resolveTreeParentId(thread);
+    if (treeParentId === null) continue;
+    if (!threadIds.has(treeParentId)) continue;
 
-    threadIdsWithChildren.add(thread.parentThreadId);
+    threadIdsWithChildren.add(treeParentId);
   }
 
   return threadIdsWithChildren;

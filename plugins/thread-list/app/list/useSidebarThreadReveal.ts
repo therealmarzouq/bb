@@ -8,6 +8,7 @@ import {
   resolveSidebarProjectId,
 } from "../model/project-thread-groups.js";
 import { sectionKeyForThreadSection } from "../model/section-keys.js";
+import { createSidebarTreeParentResolver } from "../model/sidebar-tree-parent.js";
 import type { CollapsibleSidebarSectionId } from "../model/sidebar-section-id.js";
 import { useBbContext } from "@get-bb/plugin-sdk/app";
 import type { OrganizationMode as SidebarOrganizationMode } from "../../shared/preferences.js";
@@ -135,6 +136,10 @@ export function useSidebarThreadRevealCore({
     () => new Map(threads.map((thread) => [thread.id, thread])),
     [threads],
   );
+  const resolveTreeParentId = useMemo(
+    () => createSidebarTreeParentResolver(threads),
+    [threads],
+  );
   const effectivePinnedThreadIds = useMemo(
     () => buildPinnedSidebarState({ threads }).effectivePinnedThreadIds,
     [threads],
@@ -188,11 +193,11 @@ export function useSidebarThreadRevealCore({
         if (environmentId !== null) {
           environmentIdsToExpand.add(environmentId);
         }
-        const parentThreadId = currentThread.parentThreadId;
-        if (parentThreadId === null) {
+        const treeParentId = resolveTreeParentId(currentThread);
+        if (treeParentId === null) {
           break;
         }
-        const parentThread = threadById.get(parentThreadId);
+        const parentThread = threadById.get(treeParentId);
         if (!parentThread) {
           break;
         }
@@ -249,6 +254,7 @@ export function useSidebarThreadRevealCore({
     organizationMode,
     threads,
     threadById,
+    resolveTreeParentId,
     effectivePinnedThreadIds,
     setCollapsedThreadIdList,
     setCollapsedEnvironmentIdList,

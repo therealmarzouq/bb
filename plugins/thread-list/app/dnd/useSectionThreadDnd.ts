@@ -464,6 +464,15 @@ function locateThreadRowPointer(
   return { threadId, relativeY, inNestBand: !movedLeft && inDwellBand };
 }
 
+function isDetachableNestedThread(
+  lookup: SectionThreadDndLookup,
+  thread: SidebarThread,
+): boolean {
+  return (
+    thread.parentThreadId !== null && lookup.nestParentIdByItemId.has(thread.id)
+  );
+}
+
 export function buildPinInsertRequests(
   lookup: SectionThreadDndLookup,
   threadIds: readonly string[],
@@ -634,9 +643,9 @@ export function resolveSectionThreadDropDecision(
 
   const threadIds = threads.map((thread) => thread.id);
   if (toParentKey === PINNED_THREAD_PARENT_KEY) {
-    const detachThreadIds = threadIds.filter((threadId) =>
-      lookup.nestParentIdByItemId.has(threadId),
-    );
+    const detachThreadIds = threads
+      .filter((thread) => isDetachableNestedThread(lookup, thread))
+      .map((thread) => thread.id);
     const pinThreadIds = threads
       .filter((thread) => thread.pinnedAt === null)
       .map((thread) => thread.id);
@@ -670,7 +679,7 @@ export function resolveSectionThreadDropDecision(
     : (lookup.sectionIdByParentKey.get(toParentKey) ?? null);
   const unpinThreadIds = getPinnedThreadIds(threads);
   const updates = threads.flatMap((thread): SectionThreadUpdate[] => {
-    const detach = lookup.nestParentIdByItemId.has(thread.id);
+    const detach = isDetachableNestedThread(lookup, thread);
     if (sectionId !== undefined && (detach || thread.sectionId !== sectionId)) {
       return [
         detach

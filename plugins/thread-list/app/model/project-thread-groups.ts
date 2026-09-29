@@ -2,6 +2,10 @@ import { compareCodepoint } from "./compare-codepoint.js";
 import { buildSectionKey } from "./section-keys.js";
 import type { SidebarThread } from "./sidebar-thread.js";
 import {
+  createSidebarTreeParentResolver,
+  type SidebarTreeParentResolver,
+} from "./sidebar-tree-parent.js";
+import {
   getCollapsedChildActivity,
   type CollapsedChildActivity,
 } from "./thread-activity.js";
@@ -297,11 +301,10 @@ function buildThreadNode({
 function isRootThread(
   thread: SidebarThread,
   projectThreadIds: ReadonlySet<string>,
+  resolveTreeParentId: SidebarTreeParentResolver,
 ): boolean {
-  return (
-    thread.parentThreadId === null ||
-    !projectThreadIds.has(thread.parentThreadId)
-  );
+  const treeParentId = resolveTreeParentId(thread);
+  return treeParentId === null || !projectThreadIds.has(treeParentId);
 }
 
 export function createSidebarProjectIdResolver(
@@ -369,17 +372,19 @@ function buildThreadTreeItems(
 ): ProjectThreadItem[] {
   const projectThreads = allThreads.filter(isSidebarProjectThread);
   const projectThreadIds = new Set(projectThreads.map((thread) => thread.id));
+  const resolveTreeParentId = createSidebarTreeParentResolver(projectThreads);
   const childrenByParentId = new Map<string, SidebarThread[]>();
 
   for (const thread of projectThreads) {
-    if (thread.parentThreadId === null) continue;
-    if (!projectThreadIds.has(thread.parentThreadId)) continue;
+    const treeParentId = resolveTreeParentId(thread);
+    if (treeParentId === null) continue;
+    if (!projectThreadIds.has(treeParentId)) continue;
 
-    const children = childrenByParentId.get(thread.parentThreadId);
+    const children = childrenByParentId.get(treeParentId);
     if (children) {
       children.push(thread);
     } else {
-      childrenByParentId.set(thread.parentThreadId, [thread]);
+      childrenByParentId.set(treeParentId, [thread]);
     }
   }
 
@@ -387,7 +392,7 @@ function buildThreadTreeItems(
   const rootNodes: ProjectThreadNode[] = [];
 
   for (const thread of projectThreads) {
-    if (!isRootThread(thread, projectThreadIds)) continue;
+    if (!isRootThread(thread, projectThreadIds, resolveTreeParentId)) continue;
     if (visitedThreadIds.has(thread.id)) continue;
 
     rootNodes.push(
