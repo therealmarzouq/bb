@@ -1209,3 +1209,53 @@ describe("worktree group section dragging", () => {
     });
   });
 });
+
+describe("fork nested under its source", () => {
+  function createForkLookup() {
+    return collectSectionThreadDndLookup(
+      buildSectionThreadList(
+        [
+          createThread({ id: "source", title: "Source", sectionId: "a" }),
+          createThread({
+            id: "fork",
+            title: "Fork",
+            sourceThreadId: "source",
+            originKind: "fork",
+            createdAt: 2,
+          }),
+        ],
+        undefined,
+        [
+          { id: "a", name: "Section A" },
+          { id: "b", name: "Section B" },
+        ],
+      ),
+      CHRONOLOGICAL_CONTAINER_ID,
+      [],
+    );
+  }
+
+  it("moves a fork to another section without clearing a parent it never had", () => {
+    const lookup = createForkLookup();
+    const sectionBKey = lookup.sectionParentKeyBySectionId.get("section:b");
+
+    expect(
+      resolveSectionThreadDropDecision(lookup, "fork", sectionBKey ?? null),
+    ).toEqual({
+      kind: "move",
+      toParentKey: sectionBKey,
+      ...dropChanges("fork", {
+        updates: [{ threadId: "fork", sectionId: "b" }],
+      }),
+    });
+  });
+
+  it("pins a fork without clearing a parent it never had", () => {
+    expect(
+      resolveSectionThreadDropDecision(createForkLookup(), "fork", "pinned"),
+    ).toEqual({
+      kind: "pin",
+      ...dropChanges("fork", { pinThreadIds: ["fork"] }),
+    });
+  });
+});

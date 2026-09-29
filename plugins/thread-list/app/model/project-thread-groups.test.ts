@@ -160,7 +160,7 @@ describe("buildProjectThreadGroups", () => {
     expect(findNode(rootItems, "manager-grandchild")?.depth).toBe(3);
   });
 
-  it("renders forks as roots and excludes side chats", () => {
+  it("nests forks under their source and excludes side chats", () => {
     const rootItems = buildProjectThreadGroups([
       createThread({
         id: "thr_parent",
@@ -183,10 +183,71 @@ describe("buildProjectThreadGroups", () => {
       }),
     ]);
 
-    expect(summarizeItems(rootItems)).toEqual(["thr_parent", "thr_fork"]);
-    expect(findNode(rootItems, "thr_parent")?.children).toEqual([]);
-    expect(findNode(rootItems, "thr_fork")?.depth).toBe(0);
+    expect(summarizeItems(rootItems)).toEqual([
+      { id: "thr_parent", children: ["thr_fork"] },
+    ]);
+    expect(findNode(rootItems, "thr_parent")?.stats.childCount).toBe(1);
+    expect(findNode(rootItems, "thr_fork")?.depth).toBe(1);
     expect(findNode(rootItems, "thr_sidechat")).toBeNull();
+  });
+
+  it("nests forks of forks recursively", () => {
+    const rootItems = buildProjectThreadGroups([
+      createThread({ id: "thr_source", createdAt: 10 }),
+      createThread({
+        id: "thr_fork",
+        sourceThreadId: "thr_source",
+        originKind: "fork",
+        createdAt: 20,
+      }),
+      createThread({
+        id: "thr_fork_of_fork",
+        sourceThreadId: "thr_fork",
+        originKind: "fork",
+        createdAt: 30,
+      }),
+    ]);
+
+    expect(summarizeItems(rootItems)).toEqual([
+      {
+        id: "thr_source",
+        children: [{ id: "thr_fork", children: ["thr_fork_of_fork"] }],
+      },
+    ]);
+    expect(findNode(rootItems, "thr_fork_of_fork")?.depth).toBe(2);
+  });
+
+  it("prefers an explicit parentThreadId over the fork source", () => {
+    const rootItems = buildProjectThreadGroups([
+      createThread({ id: "thr_source", createdAt: 10 }),
+      createThread({ id: "thr_manager", createdAt: 15 }),
+      createThread({
+        id: "thr_fork",
+        parentThreadId: "thr_manager",
+        sourceThreadId: "thr_source",
+        originKind: "fork",
+        createdAt: 20,
+      }),
+    ]);
+
+    expect(summarizeItems(rootItems)).toEqual([
+      { id: "thr_manager", children: ["thr_fork"] },
+      "thr_source",
+    ]);
+  });
+
+  it("keeps a fork at the root when its source is outside the project", () => {
+    const rootItems = buildProjectThreadGroups([
+      createThread({
+        id: "thr_fork",
+        sourceThreadId: "thr_elsewhere",
+        originKind: "fork",
+        createdAt: 20,
+      }),
+      createThread({ id: "thr_other", createdAt: 10 }),
+    ]);
+
+    expect(summarizeItems(rootItems)).toEqual(["thr_fork", "thr_other"]);
   });
 
   it("keeps orphaned children as project roots", () => {
@@ -765,6 +826,55 @@ describe("section bucketing", () => {
         items: ["a", "b"],
       },
       "d",
+    ]);
+  });
+
+  it("nests an unsectioned fork under its sectioned source", () => {
+    const items = buildSectionThreadList(
+      [
+        createThread({ id: "source", sectionId: "sec_work", createdAt: 10 }),
+        createThread({
+          id: "fork",
+          sourceThreadId: "source",
+          originKind: "fork",
+          createdAt: 20,
+        }),
+      ],
+      compareStandardThreads,
+      [{ id: "sec_work", name: "Work" }],
+    );
+
+    expect(summarizeItems(items)).toEqual([
+      {
+        section: "chronological::sec_work",
+        name: "Work",
+        items: [{ id: "source", children: ["fork"] }],
+      },
+    ]);
+  });
+
+  it("keeps a fork moved to another section at that section's root", () => {
+    const items = buildSectionThreadList(
+      [
+        createThread({ id: "source", sectionId: "sec_work", createdAt: 10 }),
+        createThread({
+          id: "fork",
+          sectionId: "sec_later",
+          sourceThreadId: "source",
+          originKind: "fork",
+          createdAt: 20,
+        }),
+      ],
+      compareStandardThreads,
+      [
+        { id: "sec_work", name: "Work" },
+        { id: "sec_later", name: "Later" },
+      ],
+    );
+
+    expect(summarizeItems(items)).toEqual([
+      { section: "chronological::sec_work", name: "Work", items: ["source"] },
+      { section: "chronological::sec_later", name: "Later", items: ["fork"] },
     ]);
   });
 
